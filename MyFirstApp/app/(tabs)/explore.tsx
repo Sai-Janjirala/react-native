@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, FlatList, Pressable, ActivityIndicator, Alert, Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from 'expo-router';
 
@@ -8,12 +7,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-
-interface LeaderboardEntry {
-  name: string;
-  score: number;
-  date: string;
-}
+import { getLeaderboard, resetAllScores, LeaderboardEntry } from '@/utils/high-score';
 
 export default function HighScoresScreen() {
   const colorScheme = useColorScheme();
@@ -26,12 +20,8 @@ export default function HighScoresScreen() {
   const loadLeaderboard = async () => {
     try {
       setLoading(true);
-      const stored = await AsyncStorage.getItem('@flappy_modi_leaderboard');
-      if (stored) {
-        setLeaderboard(JSON.parse(stored));
-      } else {
-        setLeaderboard([]);
-      }
+      const scores = await getLeaderboard();
+      setLeaderboard(scores);
     } catch (e) {
       console.error('Failed to load leaderboard:', e);
     } finally {
@@ -59,8 +49,7 @@ export default function HighScoresScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await AsyncStorage.removeItem('@flappy_modi_leaderboard');
-              await AsyncStorage.removeItem('@flappy_modi_high_score');
+              await resetAllScores();
               setLeaderboard([]);
               Alert.alert('Reset Complete', 'All high scores have been cleared.');
             } catch (e) {
