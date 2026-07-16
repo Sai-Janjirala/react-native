@@ -156,6 +156,7 @@ export default function GameScreen() {
   const onGameOver = async (finalScore: number) => {
     triggerHaptic(Haptics.ImpactFeedbackStyle.Heavy);
     setGameState('GAME_OVER');
+    frameCallback.setActive(false);
     
     // Stop bg music and play defeat sound
     try {
@@ -296,7 +297,6 @@ export default function GameScreen() {
     // Collisions Check: Ground/Ceiling
     if (birdY.value < 0 || birdY.value > canvasHeight - BIRD_SIZE) {
       isGameOverSV.value = true;
-      frameCallback.setActive(false);
       runOnJS(onGameOver)(scoreSV.value);
       return;
     }
@@ -307,7 +307,6 @@ export default function GameScreen() {
     if (BIRD_X + BIRD_SIZE >= p1X && BIRD_X <= p1X + PIPE_WIDTH) {
       if (birdY.value < p1Gap - PIPE_GAP / 2 || birdY.value + BIRD_SIZE > p1Gap + PIPE_GAP / 2) {
         isGameOverSV.value = true;
-        frameCallback.setActive(false);
         runOnJS(onGameOver)(scoreSV.value);
         return;
       }
@@ -319,7 +318,6 @@ export default function GameScreen() {
     if (BIRD_X + BIRD_SIZE >= p2X && BIRD_X <= p2X + PIPE_WIDTH) {
       if (birdY.value < p2Gap - PIPE_GAP / 2 || birdY.value + BIRD_SIZE > p2Gap + PIPE_GAP / 2) {
         isGameOverSV.value = true;
-        frameCallback.setActive(false);
         runOnJS(onGameOver)(scoreSV.value);
         return;
       }
