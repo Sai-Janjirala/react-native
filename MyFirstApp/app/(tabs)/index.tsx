@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, View, Pressable, Dimensions, Alert, Modal, TextInput, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { Audio } from 'expo-av';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import Animated, { 
   useSharedValue, 
@@ -17,6 +16,8 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { getHighScore, saveHighScore, saveLeaderboardEntry } from '@/utils/high-score';
+import { GameOverOverlay } from '@/components/game-over-overlay';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -71,14 +72,8 @@ export default function GameScreen() {
   // Load High Score
   useEffect(() => {
     const loadHighScore = async () => {
-      try {
-        const storedScore = await AsyncStorage.getItem('@flappy_modi_high_score');
-        if (storedScore) {
-          setHighScore(parseInt(storedScore));
-        }
-      } catch (e) {
-        console.error('Failed to load high score:', e);
-      }
+      const storedScore = await getHighScore();
+      setHighScore(storedScore);
     };
     loadHighScore();
 
@@ -197,9 +192,9 @@ export default function GameScreen() {
     }
     setSessionBest(currentSessionBest);
 
-    if (finalScore > highScore) {
+    const updated = await saveHighScore(finalScore);
+    if (updated) {
       setHighScore(finalScore);
-      await AsyncStorage.setItem('@flappy_modi_high_score', finalScore.toString());
       setIsHighScoreModalVisible(true);
     }
   };
@@ -258,25 +253,7 @@ export default function GameScreen() {
     if (!playerName.trim()) return;
     
     try {
-      const name = playerName.trim();
-      const scoreEntry = {
-        name,
-        score,
-        date: new Date().toISOString(),
-      };
-
-      const storedScores = await AsyncStorage.getItem('@flappy_modi_leaderboard');
-      let leaderboard = [];
-      if (storedScores) {
-        leaderboard = JSON.parse(storedScores);
-      }
-      
-      leaderboard.push(scoreEntry);
-      // Sort and keep top 10
-      leaderboard.sort((a: any, b: any) => b.score - a.score);
-      leaderboard = leaderboard.slice(0, 10);
-
-      await AsyncStorage.setItem('@flappy_modi_leaderboard', JSON.stringify(leaderboard));
+      await saveLeaderboardEntry(playerName, score);
       setIsHighScoreModalVisible(false);
       setPlayerName('');
       Alert.alert('Saved!', 'Your score is now on the Leaderboard!');
@@ -486,36 +463,14 @@ export default function GameScreen() {
       )}
 
       {/* Game Over Screen */}
-      {gameState === 'GAME_OVER' && (
-        <View style={styles.overlayContainer}>
-          <ThemedText type="title" style={[styles.gameOverText, { color: '#FF3B30' }]}>
-            TRY AGAIN
-          </ThemedText>
-          
-          <View style={[styles.resultsBoard, isDark ? styles.boardDark : styles.boardLight]}>
-            <View style={styles.resultItem}>
-              <ThemedText style={styles.resultLabel}>Score</ThemedText>
-              <ThemedText style={styles.resultVal}>{score}</ThemedText>
-            </View>
-            <View style={styles.resultItem}>
-              <ThemedText style={styles.resultLabel}>Session Best</ThemedText>
-              <ThemedText style={styles.resultVal}>{sessionBest}</ThemedText>
-            </View>
-            <View style={styles.resultItem}>
-              <ThemedText style={styles.resultLabel}>All-Time Best</ThemedText>
-              <ThemedText style={styles.resultVal}>{highScore}</ThemedText>
-            </View>
-          </View>
-
-          <Pressable 
-            style={[styles.restartButton, { backgroundColor: '#A855F7' }]}
-            onPress={startGame}
-          >
-            <IconSymbol name="refresh" size={24} color="#fff" />
-            <ThemedText style={styles.restartText}>TRY AGAIN</ThemedText>
-          </Pressable>
-        </View>
-      )}
+      <GameOverOverlay
+        visible={gameState === 'GAME_OVER'}
+        score={score}
+        sessionBest={sessionBest}
+        highScore={highScore}
+        onRestart={startGame}
+        onHome={() => setGameState('IDLE')}
+      />
 
       {/* High Score Name Dialog */}
       <Modal
@@ -723,66 +678,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  gameOverText: {
-    fontSize: 48,
-    fontWeight: 'bold',
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 2, height: 2 },
-    textShadowRadius: 2,
-  },
-  resultsBoard: {
-    width: '100%',
-    maxWidth: 280,
-    borderRadius: 16,
-    padding: 20,
-    marginVertical: 24,
-    gap: 12,
-    borderWidth: 2,
-    borderColor: '#543847',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  boardLight: {
-    backgroundColor: '#fff',
-  },
-  boardDark: {
-    backgroundColor: '#1E1E1E',
-  },
-  resultItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  resultLabel: {
-    fontSize: 16,
-    color: '#8e8e93',
-    fontWeight: '600',
-  },
-  resultVal: {
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  restartButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 28,
-    borderRadius: 24,
-    gap: 8,
-    shadowColor: '#A855F7',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 6,
-  },
-  restartText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
+
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',

@@ -1,10 +1,8 @@
 import React from 'react';
-import { StyleSheet, View, Pressable, Dimensions } from 'react-native';
+import { StyleSheet, View, Pressable } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface GameOverOverlayProps {
   visible: boolean;
