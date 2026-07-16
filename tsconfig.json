@@ -1,0 +1,3 @@
+{
+  "extends": "./MyFirstApp/tsconfig.json"
+}
