@@ -18,24 +18,15 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { getHighScore, saveHighScore, saveLeaderboardEntry } from '@/utils/high-score';
 import { GameOverOverlay } from '@/components/game-over-overlay';
+import { GAME_CONFIG, getDifficultyParams } from '@/constants/game-config';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-
-// Game constants
-const BIRD_X = 60;
-const BIRD_SIZE = 55;
-const PIPE_WIDTH = 68;
-const PIPE_GAP = 170; // gap height
-const GRAVITY = 0.4;
-const JUMP_STRENGTH = -8;
-const PIPE_SPEED = 3.5;
-const FLOOR_HEIGHT = 100;
 
 const getRandomGapY = () => {
   "worklet";
   // Return center coordinates for the pipe gap
   const minGapY = 180;
-  const maxGapY = SCREEN_HEIGHT - FLOOR_HEIGHT - 180;
+  const maxGapY = SCREEN_HEIGHT - GAME_CONFIG.FLOOR_HEIGHT - 180;
   return Math.floor(Math.random() * (maxGapY - minGapY)) + minGapY;
 };
 
@@ -47,8 +38,9 @@ export default function GameScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
-  // Game States: 'IDLE' | 'PLAYING' | 'GAME_OVER'
-  const [gameState, setGameState] = useState<'IDLE' | 'PLAYING' | 'GAME_OVER'>('IDLE');
+  // Game States: 'IDLE' | 'COUNTDOWN' | 'PLAYING' | 'GAME_OVER'
+  const [gameState, setGameState] = useState<'IDLE' | 'COUNTDOWN' | 'PLAYING' | 'GAME_OVER'>('IDLE');
+  const [countdown, setCountdown] = useState(3);
   const [score, setScore] = useState(0);
   const [highScore, setHighScore] = useState(0);
   const [sessionBest, setSessionBest] = useState(0);
@@ -64,10 +56,12 @@ export default function GameScreen() {
   // Pipe 1 shared values
   const pipe1X = useSharedValue(SCREEN_WIDTH + 100);
   const pipe1GapY = useSharedValue(SCREEN_HEIGHT / 2 - 50); // Center of gap
+  const pipe1GapSize = useSharedValue(215);
   
   // Pipe 2 shared values
-  const pipe2X = useSharedValue(SCREEN_WIDTH + 100 + (SCREEN_WIDTH + PIPE_WIDTH) / 2);
+  const pipe2X = useSharedValue(SCREEN_WIDTH + 100 + (SCREEN_WIDTH + GAME_CONFIG.PIPE_WIDTH) / 2);
   const pipe2GapY = useSharedValue(SCREEN_HEIGHT / 2 - 50);
+  const pipe2GapSize = useSharedValue(215);
 
   // Audio elements
   const bgSoundRef = useRef<Audio.Sound | null>(null);
@@ -213,7 +207,8 @@ export default function GameScreen() {
     if (gameState === 'IDLE') {
       startGame();
     } else if (gameState === 'PLAYING') {
-      birdVelocity.value = JUMP_STRENGTH;
+      const params = getDifficultyParams(score);
+      birdVelocity.value = params.jumpStrength;
       triggerHaptic(Haptics.ImpactFeedbackStyle.Light);
     }
   };
@@ -222,10 +217,17 @@ export default function GameScreen() {
     // Reset positions
     birdY.value = SCREEN_HEIGHT / 2 - 100;
     birdVelocity.value = 0;
+    
+    // Get initial easy parameters
+    const params = getDifficultyParams(0);
+    
     pipe1X.value = SCREEN_WIDTH + 100;
     pipe1GapY.value = getRandomGapY();
-    pipe2X.value = SCREEN_WIDTH + 100 + (SCREEN_WIDTH + PIPE_WIDTH) / 2;
+    pipe1GapSize.value = params.pipeGap;
+    
+    pipe2X.value = SCREEN_WIDTH + 100 + (SCREEN_WIDTH + GAME_CONFIG.PIPE_WIDTH) / 2 + params.spawnOffset;
     pipe2GapY.value = getRandomGapY();
+    pipe2GapSize.value = params.pipeGap;
 
     pipe1Scored.current = false;
     pipe2Scored.current = false;
@@ -244,11 +246,26 @@ export default function GameScreen() {
       console.log('Error stopping crash sound in startGame:', e);
     }
 
-    setGameState('PLAYING');
-
-    // Start background song
-    playBgMusic();
+    setGameState('COUNTDOWN');
   };
+
+  // Countdown timer effect
+  useEffect(() => {
+    if (gameState !== 'COUNTDOWN') return;
+    setCountdown(3);
+    const interval = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev === 1) {
+          clearInterval(interval);
+          setGameState('PLAYING');
+          playBgMusic();
+          return 3;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [gameState]);
 
 
 
@@ -275,40 +292,52 @@ export default function GameScreen() {
     // Clamp delta to avoid huge jumps if there are frame drops
     const deltaTime = Math.min(3, timeDelta / 16.666);
 
-    const canvasHeight = SCREEN_HEIGHT - FLOOR_HEIGHT;
+    const canvasHeight = SCREEN_HEIGHT - GAME_CONFIG.FLOOR_HEIGHT;
+
+    // Get current difficulty configuration parameters dynamically based on current score
+    const params = getDifficultyParams(scoreSV.value);
 
     // Apply gravity
-    birdVelocity.value += GRAVITY * deltaTime;
+    birdVelocity.value += params.gravity * deltaTime;
     birdY.value += birdVelocity.value * deltaTime;
 
     // Move Pipe 1
-    pipe1X.value -= PIPE_SPEED * deltaTime;
-    if (pipe1X.value < -PIPE_WIDTH) {
-      pipe1X.value = SCREEN_WIDTH;
+    pipe1X.value -= params.pipeSpeed * deltaTime;
+    if (pipe1X.value < -GAME_CONFIG.PIPE_WIDTH) {
+      pipe1X.value = SCREEN_WIDTH + params.spawnOffset;
       pipe1GapY.value = getRandomGapY();
+      pipe1GapSize.value = params.pipeGap;
       pipe1Scored.current = false;
     }
 
     // Move Pipe 2
-    pipe2X.value -= PIPE_SPEED * deltaTime;
-    if (pipe2X.value < -PIPE_WIDTH) {
-      pipe2X.value = SCREEN_WIDTH;
+    pipe2X.value -= params.pipeSpeed * deltaTime;
+    if (pipe2X.value < -GAME_CONFIG.PIPE_WIDTH) {
+      pipe2X.value = SCREEN_WIDTH + params.spawnOffset;
       pipe2GapY.value = getRandomGapY();
+      pipe2GapSize.value = params.pipeGap;
       pipe2Scored.current = false;
     }
 
     // Collisions Check: Ground/Ceiling
-    if (birdY.value < 0 || birdY.value > canvasHeight - BIRD_SIZE) {
+    if (birdY.value < 0 || birdY.value > canvasHeight - GAME_CONFIG.BIRD_SIZE) {
       isGameOverSV.value = true;
       runOnJS(onGameOver)(scoreSV.value);
       return;
     }
 
+    // Hitbox padding for forgiving, fair collision (from game config)
+    const birdLeft = GAME_CONFIG.BIRD_X + GAME_CONFIG.HITBOX_PADDING;
+    const birdRight = GAME_CONFIG.BIRD_X + GAME_CONFIG.BIRD_SIZE - GAME_CONFIG.HITBOX_PADDING;
+    const birdTop = birdY.value + GAME_CONFIG.HITBOX_PADDING;
+    const birdBottom = birdY.value + GAME_CONFIG.BIRD_SIZE - GAME_CONFIG.HITBOX_PADDING;
+
     // Collisions Check: Pipe 1
     const p1X = pipe1X.value;
     const p1Gap = pipe1GapY.value;
-    if (BIRD_X + BIRD_SIZE >= p1X && BIRD_X <= p1X + PIPE_WIDTH) {
-      if (birdY.value < p1Gap - PIPE_GAP / 2 || birdY.value + BIRD_SIZE > p1Gap + PIPE_GAP / 2) {
+    const p1GapSize = pipe1GapSize.value;
+    if (birdRight >= p1X && birdLeft <= p1X + GAME_CONFIG.PIPE_WIDTH) {
+      if (birdTop < p1Gap - p1GapSize / 2 || birdBottom > p1Gap + p1GapSize / 2) {
         isGameOverSV.value = true;
         runOnJS(onGameOver)(scoreSV.value);
         return;
@@ -318,8 +347,9 @@ export default function GameScreen() {
     // Collisions Check: Pipe 2
     const p2X = pipe2X.value;
     const p2Gap = pipe2GapY.value;
-    if (BIRD_X + BIRD_SIZE >= p2X && BIRD_X <= p2X + PIPE_WIDTH) {
-      if (birdY.value < p2Gap - PIPE_GAP / 2 || birdY.value + BIRD_SIZE > p2Gap + PIPE_GAP / 2) {
+    const p2GapSize = pipe2GapSize.value;
+    if (birdRight >= p2X && birdLeft <= p2X + GAME_CONFIG.PIPE_WIDTH) {
+      if (birdTop < p2Gap - p2GapSize / 2 || birdBottom > p2Gap + p2GapSize / 2) {
         isGameOverSV.value = true;
         runOnJS(onGameOver)(scoreSV.value);
         return;
@@ -327,12 +357,12 @@ export default function GameScreen() {
     }
 
     // Scoring check
-    if (!pipe1Scored.current && p1X + PIPE_WIDTH < BIRD_X) {
+    if (!pipe1Scored.current && p1X + GAME_CONFIG.PIPE_WIDTH < birdLeft) {
       pipe1Scored.current = true;
       scoreSV.value = scoreSV.value + 1;
       runOnJS(onScoreIncrement)(scoreSV.value);
     }
-    if (!pipe2Scored.current && p2X + PIPE_WIDTH < BIRD_X) {
+    if (!pipe2Scored.current && p2X + GAME_CONFIG.PIPE_WIDTH < birdLeft) {
       pipe2Scored.current = true;
       scoreSV.value = scoreSV.value + 1;
       runOnJS(onScoreIncrement)(scoreSV.value);
@@ -360,7 +390,7 @@ export default function GameScreen() {
 
   const pipe1TopStyle = useAnimatedStyle(() => {
     // Height of top pipe is the center gap position minus half the gap size
-    const topHeight = Math.max(0, pipe1GapY.value - PIPE_GAP / 2);
+    const topHeight = Math.max(0, pipe1GapY.value - pipe1GapSize.value / 2);
     return {
       left: pipe1X.value,
       height: topHeight,
@@ -369,7 +399,7 @@ export default function GameScreen() {
 
   const pipe1BottomStyle = useAnimatedStyle(() => {
     // Height of bottom pipe is canvas height minus center gap position minus half the gap size
-    const bottomHeight = Math.max(0, (SCREEN_HEIGHT - FLOOR_HEIGHT) - (pipe1GapY.value + PIPE_GAP / 2));
+    const bottomHeight = Math.max(0, (SCREEN_HEIGHT - GAME_CONFIG.FLOOR_HEIGHT) - (pipe1GapY.value + pipe1GapSize.value / 2));
     return {
       left: pipe1X.value,
       height: bottomHeight,
@@ -377,7 +407,7 @@ export default function GameScreen() {
   });
 
   const pipe2TopStyle = useAnimatedStyle(() => {
-    const topHeight = Math.max(0, pipe2GapY.value - PIPE_GAP / 2);
+    const topHeight = Math.max(0, pipe2GapY.value - pipe2GapSize.value / 2);
     return {
       left: pipe2X.value,
       height: topHeight,
@@ -385,7 +415,7 @@ export default function GameScreen() {
   });
 
   const pipe2BottomStyle = useAnimatedStyle(() => {
-    const bottomHeight = Math.max(0, (SCREEN_HEIGHT - FLOOR_HEIGHT) - (pipe2GapY.value + PIPE_GAP / 2));
+    const bottomHeight = Math.max(0, (SCREEN_HEIGHT - GAME_CONFIG.FLOOR_HEIGHT) - (pipe2GapY.value + pipe2GapSize.value / 2));
     return {
       left: pipe2X.value,
       height: bottomHeight,
@@ -450,7 +480,7 @@ export default function GameScreen() {
           >
             <IconSymbol name="play" size={64} color="#A855F7" />
             <ThemedText style={styles.tapToPlayText}>
-              TAP TO FLAP & START
+              TAP TO START
             </ThemedText>
           </Animated.View>
 
@@ -460,6 +490,19 @@ export default function GameScreen() {
               style={styles.previewImage}
             />
           </View>
+        </View>
+      )}
+
+      {/* Countdown Screen */}
+      {gameState === 'COUNTDOWN' && (
+        <View style={styles.countdownOverlay}>
+          <Animated.Text 
+            key={countdown} 
+            entering={FadeIn.duration(300)} 
+            style={styles.countdownText}
+          >
+            {countdown}
+          </Animated.Text>
         </View>
       )}
 
@@ -521,7 +564,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    bottom: FLOOR_HEIGHT,
+    bottom: GAME_CONFIG.FLOOR_HEIGHT,
   },
   skyLight: {
     backgroundColor: '#70c5cf',
@@ -541,7 +584,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: FLOOR_HEIGHT,
+    height: GAME_CONFIG.FLOOR_HEIGHT,
   },
   floorLight: {
     backgroundColor: '#ded895',
@@ -565,10 +608,10 @@ const styles = StyleSheet.create({
   },
   birdContainer: {
     position: 'absolute',
-    left: BIRD_X,
-    width: BIRD_SIZE,
-    height: BIRD_SIZE,
-    borderRadius: BIRD_SIZE / 2,
+    left: GAME_CONFIG.BIRD_X,
+    width: GAME_CONFIG.BIRD_SIZE,
+    height: GAME_CONFIG.BIRD_SIZE,
+    borderRadius: GAME_CONFIG.BIRD_SIZE / 2,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
@@ -581,11 +624,11 @@ const styles = StyleSheet.create({
   birdImage: {
     width: '100%',
     height: '100%',
-    borderRadius: BIRD_SIZE / 2,
+    borderRadius: GAME_CONFIG.BIRD_SIZE / 2,
   },
   pipe: {
     position: 'absolute',
-    width: PIPE_WIDTH,
+    width: GAME_CONFIG.PIPE_WIDTH,
     backgroundColor: '#73c739',
     borderWidth: 4,
     borderColor: '#543847',
@@ -598,7 +641,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 10,
   },
   pipeBottom: {
-    bottom: FLOOR_HEIGHT - 4, // overlap floor slightly
+    bottom: GAME_CONFIG.FLOOR_HEIGHT - 4, // overlap floor slightly
     borderTopLeftRadius: 10,
     borderTopRightRadius: 10,
   },
@@ -742,5 +785,24 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  countdownOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    zIndex: 25,
+  },
+  countdownText: {
+    fontSize: 120,
+    fontWeight: '900',
+    color: '#fff',
+    textShadowColor: 'rgba(0, 0, 0, 0.4)',
+    textShadowOffset: { width: 4, height: 4 },
+    textShadowRadius: 8,
   },
 });
