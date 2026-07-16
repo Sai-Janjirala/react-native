@@ -31,6 +31,14 @@ const JUMP_STRENGTH = -8;
 const PIPE_SPEED = 3.5;
 const FLOOR_HEIGHT = 100;
 
+const getRandomGapY = () => {
+  "worklet";
+  // Return center coordinates for the pipe gap
+  const minGapY = 180;
+  const maxGapY = SCREEN_HEIGHT - FLOOR_HEIGHT - 180;
+  return Math.floor(Math.random() * (maxGapY - minGapY)) + minGapY;
+};
+
 
 // Session storage fallback for native platforms
 let nativeSessionScores: number[] = [];
@@ -242,12 +250,7 @@ export default function GameScreen() {
     playBgMusic();
   };
 
-  const getRandomGapY = () => {
-    // Return center coordinates for the pipe gap
-    const minGapY = 180;
-    const maxGapY = SCREEN_HEIGHT - FLOOR_HEIGHT - 180;
-    return Math.floor(Math.random() * (maxGapY - minGapY)) + minGapY;
-  };
+
 
   // High score save handler
   const saveHighScoreEntry = async () => {
