@@ -80,7 +80,7 @@ export default function HighScoresScreen() {
         day: 'numeric',
         year: 'numeric',
       });
-    } catch (e) {
+    } catch {
       return '';
     }
   };
@@ -127,9 +127,9 @@ export default function HighScoresScreen() {
         ) : (
           <FlatList
             data={leaderboard}
-            keyExtractor={(_, index) => index.toString()}
+            keyExtractor={(_: LeaderboardEntry, index: number) => index.toString()}
             contentContainerStyle={styles.listContainer}
-            renderItem={({ item, index }) => {
+            renderItem={({ item, index }: { item: LeaderboardEntry; index: number }) => {
               const rank = index + 1;
               const isTopThree = rank <= 3;
               const trophyColors = ['#FFD700', '#C0C0C0', '#CD7F32']; // Gold, Silver, Bronze

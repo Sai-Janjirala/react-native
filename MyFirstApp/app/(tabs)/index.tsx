@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, View, Pressable, Dimensions, Alert, Modal, TextInput, ActivityIndicator, Platform } from 'react-native';
+import { StyleSheet, View, Pressable, Dimensions, Alert, Modal, TextInput, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -9,7 +9,6 @@ import Animated, {
   useAnimatedStyle, 
   useFrameCallback, 
   runOnJS,
-  withSpring,
   FadeIn
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -31,9 +30,6 @@ const JUMP_STRENGTH = -8;
 const PIPE_SPEED = 3.5;
 const FLOOR_HEIGHT = 100;
 
-// Audio constants
-const BACKGROUND_SONG_URI = 'https://assets.mixkit.co/music/preview/mixkit-funny-game-loop-3.mp3';
-const CRASH_SONG_URI = 'https://www.soundjay.com/misc/sounds/fail-trombone-01.mp3';
 
 // Session storage fallback for native platforms
 let nativeSessionScores: number[] = [];
@@ -150,8 +146,8 @@ export default function GameScreen() {
   // Triggers device haptics
   const triggerHaptic = (style = Haptics.ImpactFeedbackStyle.Medium) => {
     try {
-      Haptics.impactAsync(style).catch((e) => console.log('Haptics failed:', e));
-    } catch (e) {
+      Haptics.impactAsync(style).catch((e: any) => console.log('Haptics failed:', e));
+    } catch {
       // Ignored on web/simulator
     }
   };
@@ -290,17 +286,22 @@ export default function GameScreen() {
   };
 
   // Reanimated Physics Frame Loop
-  const frameCallback = useFrameCallback((frameInfo) => {
-    if (gameState !== 'PLAYING' || isGameOverSV.value) return;
+  const frameCallback = useFrameCallback((frameInfo: any) => {
+    if (isGameOverSV.value) return;
+
+    // Calculate delta time relative to 60 FPS (16.666 ms per frame)
+    const timeDelta = frameInfo.timeSincePreviousFrame ?? 16.666;
+    // Clamp delta to avoid huge jumps if there are frame drops
+    const deltaTime = Math.min(3, timeDelta / 16.666);
 
     const canvasHeight = SCREEN_HEIGHT - FLOOR_HEIGHT;
 
     // Apply gravity
-    birdVelocity.value += GRAVITY;
-    birdY.value += birdVelocity.value;
+    birdVelocity.value += GRAVITY * deltaTime;
+    birdY.value += birdVelocity.value * deltaTime;
 
     // Move Pipe 1
-    pipe1X.value -= PIPE_SPEED;
+    pipe1X.value -= PIPE_SPEED * deltaTime;
     if (pipe1X.value < -PIPE_WIDTH) {
       pipe1X.value = SCREEN_WIDTH;
       pipe1GapY.value = getRandomGapY();
@@ -308,7 +309,7 @@ export default function GameScreen() {
     }
 
     // Move Pipe 2
-    pipe2X.value -= PIPE_SPEED;
+    pipe2X.value -= PIPE_SPEED * deltaTime;
     if (pipe2X.value < -PIPE_WIDTH) {
       pipe2X.value = SCREEN_WIDTH;
       pipe2GapY.value = getRandomGapY();
@@ -367,7 +368,7 @@ export default function GameScreen() {
     } else {
       frameCallback.setActive(false);
     }
-  }, [gameState]);
+  }, [gameState, frameCallback]);
 
   // Animated styles
   const birdStyle = useAnimatedStyle(() => {
@@ -597,7 +598,11 @@ const styles = StyleSheet.create({
     borderTopColor: '#3A2E2F',
   },
   floorPattern: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     opacity: 0.1,
     borderBottomWidth: 10,
     borderBottomColor: '#000',
@@ -642,7 +647,11 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 10,
   },
   safeOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     zIndex: 15,
   },
   scoreContainer: {
@@ -658,7 +667,11 @@ const styles = StyleSheet.create({
     textShadowRadius: 2,
   },
   overlayContainer: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.3)',

@@ -8,26 +8,27 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const theme = colorScheme === 'dark' ? 'dark' : 'light';
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+        tabBarActiveTintColor: Colors[theme].tint,
         headerShown: false,
-        tabBarButton: HapticTab,
+        tabBarButton: HapticTab as any,
       }}>
       <Tabs.Screen
         name="index"
         options={{
           title: 'Play',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="game" color={color} />,
+          tabBarIcon: ({ color }: { color: any }) => <IconSymbol size={28} name="game" color={color} />,
         }}
       />
       <Tabs.Screen
         name="explore"
         options={{
           title: 'Scores',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="trophy" color={color} />,
+          tabBarIcon: ({ color }: { color: any }) => <IconSymbol size={28} name="trophy" color={color} />,
         }}
       />
     </Tabs>
